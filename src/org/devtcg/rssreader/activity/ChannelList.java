@@ -34,10 +34,13 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.ContextMenu;
+import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Menu.Item;
+import android.view.MenuItem;
+import android.widget.AdapterView;
 import android.widget.CursorAdapter;
 import android.widget.Filterable;
 import android.widget.ListAdapter;
@@ -70,7 +73,7 @@ public class ChannelList extends ListActivity
       RSSReader.Channels.TITLE, RSSReader.Channels.URL };
 
     @Override
-    protected void onCreate(Bundle icicle)
+    public void onCreate(Bundle icicle)
     {
         super.onCreate(icicle);
 
@@ -81,9 +84,9 @@ public class ChannelList extends ListActivity
             intent.setData(RSSReader.Channels.CONTENT_URI);
 
         if (intent.getAction() == null)
-        	intent.setAction(Intent.VIEW_ACTION);
+        	intent.setAction(Intent.ACTION_VIEW);
 
-        mCursor = managedQuery(getIntent().getData(), PROJECTION, null, null);
+        mCursor = managedQuery(getIntent().getData(), PROJECTION, null, null, null);
 
 //        bindService(new Intent(this, RSSReaderService.class),
 //          null, mServiceConn, Context.BIND_AUTO_CREATE);
@@ -102,12 +105,14 @@ public class ChannelList extends ListActivity
 //        if (mFirstTime == true)
 //        	RSSReaderService_Setup.setupAlarm(this);
 
-        ListAdapter adapter = new ChannelListAdapter(mCursor, this);
+        ListAdapter adapter = new ChannelListAdapter(this, mCursor);
         setListAdapter(adapter);
+        
+        registerForContextMenu(getListView());
     }
 
     @Override
-    protected void onStop()
+    public void onStop()
     {
     	super.onStop();
 
@@ -140,7 +145,7 @@ public class ChannelList extends ListActivity
     {
     	super.onCreateOptionsMenu(menu);
 
-    	menu.add(0, INSERT_ID, "New Channel").
+    	menu.add(0, INSERT_ID, 0, "New Channel").
     	  setShortcut('3', 'a');
 
     	return true;
@@ -150,9 +155,9 @@ public class ChannelList extends ListActivity
     public boolean onPrepareOptionsMenu(Menu menu)
     {
     	super.onPrepareOptionsMenu(menu);
-    	final boolean haveItems = mCursor.count() > 0;
+    	final boolean haveItems = mCursor.getCount() > 0;
 
-		menu.removeGroup(Menu.SELECTED_ALTERNATIVE);
+		menu.removeGroup(Menu.CATEGORY_ALTERNATIVE);
 
     	/* If there are items in the list, add the extra context menu entries
     	 * available on each channel listed. */
@@ -162,7 +167,7 @@ public class ChannelList extends ListActivity
 //
 //    		menu.addSeparator(Menu.SELECTED_ALTERNATIVE, 0);
 
-    		menu.add(Menu.SELECTED_ALTERNATIVE, REFRESH_ALL_ID, "Refresh All");
+    		menu.add(Menu.CATEGORY_ALTERNATIVE, REFRESH_ALL_ID, 0, "Refresh All");
 
 //    		menu.add(Menu.SELECTED_ALTERNATIVE, REFRESH_ID, "Refresh Channel").
 //		  	  setShortcut(0, 0, KeyEvent.KEYCODE_R);
@@ -178,7 +183,7 @@ public class ChannelList extends ListActivity
 //
 //    		menu.addSeparator(Menu.SELECTED_ALTERNATIVE, 0);
 //
-    		menu.setDefaultItem(INSERT_ID);
+    		//menu.setDefaultItem(INSERT_ID);
     	}
 
     	return true;
@@ -189,30 +194,32 @@ public class ChannelList extends ListActivity
     {
     	String action = getIntent().getAction();
 
-    	if (action.equals(Intent.PICK_ACTION) ||
-    	    action.equals(Intent.GET_CONTENT_ACTION))
+    	if (action.equals(Intent.ACTION_PICK) ||
+    	    action.equals(Intent.ACTION_GET_CONTENT))
     	{
     		Uri uri =
     		  ContentUris.withAppendedId(getIntent().getData(), id);
     		
-    		setResult(RESULT_OK, uri.toString());
+    		Intent intent = getIntent();
+    		intent.setData(uri);
+    		setResult(RESULT_OK, intent);
     	}
     	else
     	{
     		Uri uri = 
     		  ContentUris.withAppendedId(RSSReader.Posts.CONTENT_URI_LIST, id);
     		
-    		startActivity(new Intent(Intent.VIEW_ACTION, uri));
+    		startActivity(new Intent(Intent.ACTION_VIEW, uri));
     	}
     }
 
     @Override
-    public boolean onOptionsItemSelected(Menu.Item item)
+    public boolean onOptionsItemSelected(MenuItem item)
     {
-    	switch(item.getId())
+    	switch(item.getItemId())
     	{
     	case INSERT_ID:
-    		startActivity(new Intent(Intent.INSERT_ACTION, getIntent().getData()));
+    		startActivity(new Intent(Intent.ACTION_INSERT, getIntent().getData()));
     		return true;
 
 //    	case DELETE_ID:
@@ -231,35 +238,50 @@ public class ChannelList extends ListActivity
 
     	return super.onOptionsItemSelected(item);
     }
+    
+    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenuInfo info) {
+    	menu.setHeaderTitle("Feed Options");
+    	menu.setHeaderIcon(R.drawable.feedicon);
+    	
+    	menu.add("Refresh");
+    	menu.add("Remove");
+    }
+    
+    @Override
+    public boolean onContextItemSelected(MenuItem item) {
+    	Log.d("ChannelList Debug", "Context menu selected.");
+    	
+    	AdapterView.AdapterContextMenuInfo menuInfo = (AdapterView.AdapterContextMenuInfo)item.getMenuInfo();
+    	Log.d("ChannelList Debug", "menuinfo.id = " + menuInfo.id);
+    	
+    	if (item.getTitle().equals("Remove"))
+    		deleteChannel(menuInfo.id);
+    	
+    	if (item.getTitle().equals("Refresh"))
+    		refreshChannel();
+    	
+    	return false;
+    }
 
-//    private final void deleteChannel()
-//    {
-//    	long channelId = getSelectionRowID();
-//
-////    	Thread refresh;
-////
-////    	if (mRefreshThreads != null &&
-////    	    (refresh = mRefreshThreads.remove(channelId)) != null)
-////    	{
-////    		/* TODO: Stop the thread. */
-////    	}
-//
-//		/* Delete related posts. */
-//		getContentResolver().delete(RSSReader.Posts.CONTENT_URI,
-//    	  "channel_id=?", new String[] { String.valueOf(channelId) });
-//
-//		mCursor.deleteRow();
-//    }
+    private final void deleteChannel(long channelId)
+    {
+    	/* Delete related posts. */
+    	getContentResolver().delete(RSSReader.Posts.CONTENT_URI,
+    			"channel_id=?", new String[] { String.valueOf(channelId) });
+
+    	getContentResolver().delete(RSSReader.Channels.CONTENT_URI,
+    			"_id=?", new String[] { String.valueOf(channelId) });
+    }
 
     private final void refreshAllChannels()
     {
-    	if (mCursor.first() == false)
+    	if (mCursor.isFirst() == false)
     		return;
     	
     	do 
     	{
     		refreshChannel();
-    	} while (mCursor.next() == true);
+    	} while (mCursor.moveToNext() == true);
     }
 
     /* This method assumes that `mCursor` has been positioned on the record
@@ -317,9 +339,9 @@ public class ChannelList extends ListActivity
     	 * releases. */
     	private HashMap<Long, ChannelListRow> rowMap;
 
-		public ChannelListAdapter(Cursor c, Context context)
+		public ChannelListAdapter(Context context, Cursor c)
 		{
-			super(c, context);
+			super(context, c);
 			rowMap = new HashMap<Long, ChannelListRow>();
 		}
 
@@ -342,7 +364,7 @@ public class ChannelList extends ListActivity
 		@Override
 		public View newView(Context context, Cursor cursor, ViewGroup parent)
 		{
-			ChannelListRow row = new ChannelListRow(context);
+			ChannelListRow row = new ChannelListRow(context, parent);
 			row.bindView(cursor);
 			updateRowMap(cursor, row);
 			return row;

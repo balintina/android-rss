@@ -27,6 +27,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.content.ContentUris;
+import android.content.DialogInterface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -109,36 +110,40 @@ public class ChannelAdd extends Activity
 
 		mBusy = ProgressDialog.show(ChannelAdd.this,
 		  "Downloading", "Accessing XML feed...", true, false);
-
+		
 		Thread t = new Thread()
 		{
 			public void run()
 			{
 				try
-				{
+				{					
 					ChannelRefresh refresh = new ChannelRefresh(getContentResolver());
 
 					final long id = refresh.syncDB(null, -1, rssurl);
+					Log.d("RSS - Channel Add", "Running the channel add thread. ID: " + id);
 					
 					if (id >= 0)
 					{
 						URL iconurl = getDefaultFavicon(rssurl);
 						refresh.updateFavicon(id, iconurl);
 					}
-
+					
 			    	mHandler.post(new Runnable() {
 			    		public void run()
 			    		{
 			    			mBusy.dismiss();
 			    			
 			    			Uri uri = ContentUris.withAppendedId(RSSReader.Channels.CONTENT_URI, id);
-			    			setResult(RESULT_OK, uri.toString());
+			    			getIntent().setData(uri);
+			    			Log.d("RSS - ChannelAdd", "Uri value: " + uri.toString());
+			    			setResult(RESULT_OK, getIntent());
 			    			finish();
 			    		}
 			    	});
 				}
 				catch(Exception e)
 				{
+					Log.d("::Exception::", e.toString());
 					final String errmsg = e.getMessage();
 					final String errmsgFull = e.toString();
 
@@ -149,10 +154,15 @@ public class ChannelAdd extends Activity
 
 		    				String errstr = ((errmsgFull != null) ? errmsgFull : errmsg);
 
-		    				AlertDialog.show(ChannelAdd.this,
-		    				  "Feed error", R.drawable.star_big_on, 
-		    				  "An error was encountered while accessing the feed: " + errstr,
-		    				  "OK", true);
+		    				new AlertDialog.Builder(ChannelAdd.this)
+		    					.setTitle("Feed Error")
+		    					.setMessage("An error was encountered while accessing the feed: " + errstr)
+		    					.setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+		    						//whatever.
+		    						public void onClick(DialogInterface dialog, int whichButton) {
+		    							
+		    						}
+		    					}).create();
 		    			}
 		    		});
 				}			    	

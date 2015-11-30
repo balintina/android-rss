@@ -24,12 +24,15 @@ import org.devtcg.rssreader.view.ChannelHead;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.ContentUris;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
+import android.view.MenuItem;
 import android.webkit.WebView;
 import android.widget.TextView;
 
@@ -54,61 +57,55 @@ public class PostView extends Activity
 	private long mNextPostID = -1;
 	
 	@Override
-	protected void onCreate(Bundle icicle)
+	public void onCreate(Bundle icicle)
 	{
 		super.onCreate(icicle);		
 		setContentView(R.layout.post_view);
-
-//		RSSChannelHead head = (RSSChannelHead)findViewById(R.id.postViewHead);
-//		PostScrollView scroll = (PostScrollView)findViewById(R.id.postViewScroll);
-//		scroll.setChannelHead(head);
 		
 		Uri uri = getIntent().getData();
 
 		mCursor = managedQuery(uri, PROJECTION, null, null, null);
 
-		if (mCursor == null || mCursor.first() == false)
-			finish();
-
+		mCursor.moveToNext();
 		mChannelID = mCursor.getLong(mCursor.getColumnIndex(RSSReader.Posts.CHANNEL_ID));
 		mPostID = Long.parseLong(uri.getPathSegments().get(1));
 
+		ContentValues values = new ContentValues();
+		values.put(RSSReader.Posts.READ, 1);
+		getContentResolver().update(getIntent().getData(), values, null, null);
+		
 		/* TODO: Should this be in onStart() or onResume() or something?  */
-		initWithData();
+		//initWithData();
 	}
 
 	@Override
-	protected void onStart()
-	{
+	public void onStart() {
 		super.onStart();
-
-		if (mCursor == null || mCursor.first() == false)
-			return;
-
-		/* Set the post to read. */
-		mCursor.updateInt(mCursor.getColumnIndex(RSSReader.Posts.READ), 1);
-		mCursor.commitUpdates();
+		
+		initWithData();
 	}
-
-	private void initWithData()
+	
+	public void initWithData()
 	{	
 		ContentResolver cr = getContentResolver();
 
 		Cursor cChannel = cr.query(ContentUris.withAppendedId(RSSReader.Channels.CONTENT_URI, mChannelID),
 		  new String[] { RSSReader.Channels.ICON, RSSReader.Channels.LOGO, RSSReader.Channels.TITLE }, null, null, null);
 
-		assert(cChannel.count() == 1);
-		cChannel.first();
+		assert(cChannel.getCount() == 1);
+		cChannel.isFirst();
 
+		cChannel.moveToNext();
 		/* Make the view useful. */
 		ChannelHead head = (ChannelHead)findViewById(R.id.postViewHead);
 		head.setLogo(cChannel);
-//		head.setPost(mCursor);
 
 		cChannel.close();
 
 		TextView postTitle = (TextView)findViewById(R.id.postTitle);
-		postTitle.setText(mCursor, mCursor.getColumnIndex(RSSReader.Posts.TITLE));
+		
+		String title = mCursor.getString(mCursor.getColumnIndex(RSSReader.Posts.TITLE));
+		postTitle.setText(title);
 
 		WebView postText = (WebView)findViewById(R.id.postText);
 
@@ -119,7 +116,9 @@ public class PostView extends Activity
 		  getBody() +
 		  "</body></html>";
 
-		postText.loadData(html, "text/html", "utf-8");
+		Log.d("RSSReader Debug", "Contents of the feed article: " + getBody());
+		//postText.loadUrl(mCursor.getString(mCursor.getColumnIndex(RSSReader.Posts.URL)));
+		postText.loadData(getBody(), "text/html", "utf-8");		
 	}
 	
 	/* Apply some simple heuristics to the post text to determine what special
@@ -128,6 +127,8 @@ public class PostView extends Activity
 	{
 		String body =
 		  mCursor.getString(mCursor.getColumnIndex(RSSReader.Posts.BODY));
+		
+		Log.d("RSSReader Debug", "Contents of the database: " + body);
 		
 		String url =
 		  mCursor.getString(mCursor.getColumnIndex(RSSReader.Posts.URL));
@@ -166,144 +167,6 @@ public class PostView extends Activity
 			
 		return true;
 	}
-	
-	private void getSiblings()
-	{
-		if (mNextPostID < 0 || mPrevPostID < 0)
-		{
-	    	Cursor cPostList = getContentResolver().query
-	    	 (ContentUris.withAppendedId(RSSReader.Posts.CONTENT_URI_LIST, mChannelID),
-	    	  new String[] { RSSReader.Posts._ID }, null, null, null);
-
-	    	/* TODO: This is super lame; we need to use SQLite queries to
-	    	 * determine posts either newer or older than the current one
-	    	 * without. */
-	    	cPostList.first();
-	    	
-	    	int indexId = cPostList.getColumnIndex(RSSReader.Posts._ID);
-	    	
-	    	long lastId = -1;
-	    	
-	    	for (cPostList.first(); cPostList.isLast() == false; cPostList.next())
-	    	{
-	    		long thisId = cPostList.getLong(indexId);
-	    		
-	    		if (thisId == mPostID)
-	    			break;
-	    		
-	    		lastId = thisId;
-	    	}
-
-	    	/* Remember, the order is descending by date. */
-	    	if (mNextPostID < 0)
-	    		mNextPostID = lastId;
-
-	    	if (mPrevPostID < 0)
-	    	{
-	    		if (cPostList.isLast() == false)
-	    		{
-	    			cPostList.next();
-	    			mPrevPostID = cPostList.getLong(indexId);
-	    		}
-	    	}
-		}		
-	}
-
-	@Override
-	public boolean onPrepareOptionsMenu(Menu menu)
-	{
-		menu.removeGroup(0);
-		
-		getSiblings();
-
-		if (mNextPostID >= 0)
-		{
-			menu.add(0, NEXT_POST_ID, "Newer Post").
-  	  	  	  setShortcut('1', '[');
-		}
-    	
-		if (mPrevPostID >= 0)
-		{
-			menu.add(0, PREV_POST_ID, "Older Post").
-			  setShortcut('3', ']');
-			
-			menu.setDefaultItem(PREV_POST_ID);
-		}
-		
-		return true;
-	}
-	
-	private void moveTo(long id)
-	{
-		Intent intent = new Intent(Intent.VIEW_ACTION,
-		  ContentUris.withAppendedId(RSSReader.Posts.CONTENT_URI, id));
-		
-		startActivity(intent);
-		
-		/* Assume that user would do not want to keep the [now read]
-		 * current post in the history stack. */
-		finish();
-	}
-	
-	private boolean prevPost()
-	{
-		if (mPrevPostID < 0)
-			return false;
-		
-		moveTo(mPrevPostID);
-		return true;
-	}
-	
-	private boolean nextPost()
-	{
-		if (mNextPostID < 0)
-			return false;
-		
-		moveTo(mNextPostID);
-		return true;
-	}
-
-    @Override
-    public boolean onOptionsItemSelected(Menu.Item item)
-    {
-    	switch (item.getId())
-    	{
-    	case PREV_POST_ID:
-    		return prevPost();
-    		
-    	case NEXT_POST_ID:
-    		return nextPost();
-    	}
-    	
-    	return super.onOptionsItemSelected(item);
-    }
-    
-    @Override
-	public boolean onKeyUp(int keyCode, KeyEvent event)
-    {
-    	/*
-    	 * If the user actually presses left or right, let's pass that key
-    	 * press on to the WebView in case scrolling is necessary.  All 
-    	 * other direction keypresses (keypad, bracket, etc) as defined
-    	 * by KeyUtils.interpretDirection() will still be honored.
-    	 */
-    	if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT &&
-    	    keyCode != KeyEvent.KEYCODE_DPAD_RIGHT)
-    	{
-    		switch (KeyUtils.interpretDirection(keyCode))
-    		{
-    		case KeyEvent.KEYCODE_DPAD_LEFT:
-    			getSiblings();
-    			return nextPost();
-
-    		case KeyEvent.KEYCODE_DPAD_RIGHT:
-    			getSiblings();
-    			return prevPost();
-    		}
-    	}
-    	
-    	return false;
-    }
 
 //    /* 
 //     * Special ScrollView class that is used to determine if the post title

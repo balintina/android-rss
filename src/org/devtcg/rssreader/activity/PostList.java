@@ -32,6 +32,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.Menu;
+import android.view.MenuItem;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CursorAdapter;
@@ -63,10 +65,11 @@ public class PostList extends ListActivity
 		setContentView(R.layout.post_list);
 
 		Uri uri = getIntent().getData();
-		mCursor = managedQuery(uri, PROJECTION, null, null);
+		mCursor = managedQuery(uri, PROJECTION, null, null, null);
 		mID = Long.parseLong(uri.getPathSegments().get(1));
 
-		ListAdapter adapter = new PostListAdapter(mCursor, this);
+		Log.d("PostList", "The current instance id is " + mID);
+		ListAdapter adapter = new PostListAdapter(this, mCursor);
         setListAdapter(adapter);
         
         initWithData();
@@ -77,12 +80,13 @@ public class PostList extends ListActivity
 		long channelId = Long.parseLong(getIntent().getData().getPathSegments().get(1));
 
 		ContentResolver cr = getContentResolver();		
-		Cursor cChannel = cr.query(ContentUris.withAppendedId(RSSReader.Channels.CONTENT_URI, channelId),
+		Cursor cChannel = cr.query(ContentUris.withAppendedId(RSSReader.Channels.CONTENT_URI, mID),
 		  new String[] { RSSReader.Channels.LOGO, RSSReader.Channels.ICON, RSSReader.Channels.TITLE }, null, null, null);
 
-		assert(cChannel.count() == 1);
-		cChannel.first();
+		assert(cChannel.getCount() == 1);
+		cChannel.isFirst();
 
+		cChannel.moveToNext();
 		/* TODO: Check if RSSReader.Channels.LOGO exists and use it. */
 		ChannelHead head = (ChannelHead)findViewById(R.id.postListHead);
 		head.setLogo(cChannel);
@@ -95,17 +99,8 @@ public class PostList extends ListActivity
     {
 		Uri uri = 
 		  ContentUris.withAppendedId(RSSReader.Posts.CONTENT_URI, id);
-    	String action = getIntent().getAction();
-    	
-    	if (action.equals(Intent.PICK_ACTION) ||
-    	    action.equals(Intent.GET_CONTENT_ACTION))
-    	{
-    		setResult(RESULT_OK, uri.toString());
-    	}
-    	else
-    	{
-    		startActivity(new Intent(Intent.VIEW_ACTION, uri));
-    	}
+		
+    	startActivity(new Intent(Intent.ACTION_VIEW, uri));
     }
     
     @Override
@@ -117,25 +112,25 @@ public class PostList extends ListActivity
     	
 		if (mPrevID >= 0)
 		{
-			menu.add(0, PREV_ID, "Previous Channel").
+			menu.add(0, PREV_ID, 0, "Previous Channel").
   	  	  	  setShortcut('1', '[');
 		}
 
 		if (mNextID >= 0)
 		{
-			menu.add(0, NEXT_ID, "Next Channel").
+			menu.add(0, NEXT_ID, 0, "Next Channel").
 			  setShortcut('3', ']');
 
-			menu.setDefaultItem(PREV_ID);
+			//menu.setDefaultItem(PREV_ID);
 		}
 		
 		return true;
     }
     
     @Override
-    public boolean onOptionsItemSelected(Menu.Item item)
+    public boolean onOptionsItemSelected(MenuItem item)
     {
-    	switch(item.getId())
+    	switch(item.getItemId())
     	{
     	case PREV_ID:
     		return prevChannel();
@@ -159,11 +154,11 @@ public class PostList extends ListActivity
     	/* TODO: This is super lame; we need to use SQLite queries to
     	 * determine posts either newer or older than the current one
     	 * without. */
-    	cChannelList.first();
+    	cChannelList.isFirst();
 
     	long lastId = -1;
 
-    	for (cChannelList.first(); cChannelList.isLast() == false; cChannelList.next())
+    	for (cChannelList.isFirst(); cChannelList.isLast() == false; cChannelList.moveToNext())
     	{
     		long thisId = cChannelList.getLong(0);
 
@@ -180,7 +175,7 @@ public class PostList extends ListActivity
     	{
     		if (cChannelList.isLast() == false)
     		{
-    			cChannelList.next();
+    			cChannelList.moveToNext();
     			mNextID = cChannelList.getLong(0);
     		}
     	}
@@ -192,7 +187,7 @@ public class PostList extends ListActivity
     {
     	Uri uri = 
     	  ContentUris.withAppendedId(RSSReader.Posts.CONTENT_URI_LIST, id);
-		Intent intent = new Intent(Intent.VIEW_ACTION, uri);
+		Intent intent = new Intent(Intent.ACTION_VIEW, uri);
 		startActivity(intent);
 		
 		/* Assume that user would do not want to keep the [now read]
@@ -237,9 +232,9 @@ public class PostList extends ListActivity
 
     private static class PostListAdapter extends CursorAdapter implements Filterable
     {
-		public PostListAdapter(Cursor c, Context context)
+		public PostListAdapter(Context context, Cursor c)
 		{
-			super(c, context);
+			super(context, c);
 		}
 		
 		@Override

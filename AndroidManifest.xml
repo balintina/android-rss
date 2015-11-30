@@ -17,7 +17,10 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.devtcg.rssreader">
-    <application android:icon="@drawable/icon" android:label="RSSReader">
+    
+    <uses-permission android:name="android.permission.INTERNET"></uses-permission>
+    
+    <application android:icon="@drawable/feeds" android:label="Feeds">
         <provider android:name=".provider.RSSReaderProvider"
         	android:authorities="org.devtcg.rssreader.provider.RSSReader" />
 

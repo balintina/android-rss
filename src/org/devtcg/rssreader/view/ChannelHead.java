@@ -60,9 +60,9 @@ public class ChannelHead extends LinearLayout
 		init(context);
 	}
 
-	public ChannelHead(Context context, AttributeSet attrs, Map inflateParams)
+	public ChannelHead(Context context, AttributeSet attrs)
 	{
-		super(context, attrs, inflateParams);
+		super(context, attrs);
 		init(context);
 	}
 
@@ -104,7 +104,7 @@ public class ChannelHead extends LinearLayout
 	public void setLogo(String channelName, String iconData, String logoData)
 	{
 		/* TODO */
-		assert(logoData == null);
+		//assert(logoData == null);
 		
 		if (mIcon == null)
 		{

@@ -30,7 +30,8 @@ import android.net.Uri;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
-import android.view.ViewInflate;
+import android.view.ViewGroup;
+import android.view.LayoutInflater;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -38,7 +39,7 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
-public class ChannelListRow extends RelativeLayout
+public class ChannelListRow extends LinearLayout
 {
 	private ImageView mIcon;
 	private TextView mName;
@@ -49,13 +50,14 @@ public class ChannelListRow extends RelativeLayout
 //	private static final int CHANNEL_RIGHT = 2;
 //	private static final int CHANNEL_ICON = 3;
 
-	public ChannelListRow(Context context)
+	public ChannelListRow(Context context, ViewGroup parent)
 	{
 		super(context);
 
-		setLayoutParams(new RelativeLayout.LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT));
+		//setLayoutParams(new LinearLayout.LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT));
 
-		View view = ViewInflate.from(getContext()).inflate(R.layout.channel_list_item, null, false, null);
+		LayoutInflater inflater = (LayoutInflater)context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+		View view = inflater.inflate(R.layout.channel_list_item, parent, false);
 
 		mIcon = (ImageView)view.findViewById(R.id.channel_icon);
 		mName = (TextView)view.findViewById(R.id.channel_name);
@@ -63,9 +65,9 @@ public class ChannelListRow extends RelativeLayout
 		mRefresh = (ProgressBar)view.findViewById(R.id.channel_refresh);
 		mRefresh.setVisibility(View.GONE);
 		
-		RelativeLayout.LayoutParams rules =
-		  new RelativeLayout.LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT);
-		addView(view, rules);
+		//LinearLayout.LayoutParams rules =
+		//  new LinearLayout.LayoutParams(LayoutParams.FILL_PARENT, LayoutParams.WRAP_CONTENT);
+		addView(view);
 
 
 //		mIcon = new ImageView(context);
@@ -128,7 +130,7 @@ public class ChannelListRow extends RelativeLayout
 
 		Typeface tf;
 
-		int unreadCount = unread.count();
+		int unreadCount = unread.getCount();
 		unread.close();
 
 		if (unreadCount > 0)
@@ -142,7 +144,9 @@ public class ChannelListRow extends RelativeLayout
 		mIcon.setImageURI(Uri.parse(icon));
 
 		mName.setTypeface(Typeface.DEFAULT);
-		mName.setText(cursor, cursor.getColumnIndex(RSSReader.Channels.TITLE));
+		
+		String title = cursor.getString(cursor.getColumnIndex(RSSReader.Channels.TITLE));
+		mName.setText(title);
 
 		mCount.setTypeface(tf);
 		mCount.setText(new Integer(unreadCount).toString());
@@ -178,10 +182,11 @@ public class ChannelListRow extends RelativeLayout
 		
 		/* Hmm, they must have deleted this channel while we were
 		 * refreshing?  OK, we can deal... */
-		if (cursor.count() < 1)
+		if (cursor.getCount() < 1)
 			return;
 		
-		cursor.first();
+		cursor.isFirst();
+		cursor.moveToNext();
 		finishRefresh(cursor);
 		cursor.close();
 	}
